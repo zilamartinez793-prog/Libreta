@@ -179,12 +179,13 @@
         // ============================================================
 
         // 1) Enlace CSV publicado del Sheet usado por la vista ALUMNO
-        //    Archivo > Compartir > Publicar en la web > pestaña > CSV > Publicar
-        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDQtI0G4ItU7lQwoDF_lKKz9QHeDHAJgx6limei517bEHC2Bn8ttwqL2oMtZAFd8sQlPW7p6ELTJ7i/pub?gid=380835456&single=true&output=csv";
+        //    El alumno escribe su cédula y el código busca su fila dentro de este mismo archivo.
+        //    En pantalla solo se muestra la fila que coincide con su cédula, ninguna otra.
+        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSo_kMaLD16Vi8Yq-OBdRTdRUq85LykcvStmYAGN1_i8fUbWuS5B_NaszsrtYg5lxxGu7jwpiWrwei5/pub?gid=380835456&single=true&output=csv";
 
         // 2) Enlace CSV publicado del Sheet usado por la vista DOCENTE (hoja completa)
-        //    Puede ser la misma hoja u otra pestaña/gid distinto
-        const TEACHER_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2B5WaM5OrhAF4iuBn8CbSt3_UooBRXZBdA2YFAJ8FNiC3Xtx_Y8TBqjT3waI_Bc_sg393VAeoAZ7x/pub?gid=0&single=true&output=csv";
+        //    Este es el que ya me diste (gid=380835456).
+        const TEACHER_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSo_kMaLD16Vi8Yq-OBdRTdRUq85LykcvStmYAGN1_i8fUbWuS5B_NaszsrtYg5lxxGu7jwpiWrwei5/pub?gid=380835456&single=true&output=csv";
 
         // Columnas esperadas para el boletín del alumno (ajusta si tu hoja usa otros nombres):
         const COLUMN_MAP = {
@@ -238,7 +239,7 @@
         }
 
         function cargarDatosAlumno() {
-            if (!SHEET_CSV_URL || SHEET_CSV_URL === "PEGA_AQUI_TU_ENLACE_CSV") {
+            if (!SHEET_CSV_URL || SHEET_CSV_URL === "PEGA_AQUI_TU_ENLACE_CSV_VISTA_ALUMNO") {
                 setStatus('error', 'Sin conectar');
                 studentData = fallbackData;
                 return;
