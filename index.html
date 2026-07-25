@@ -256,6 +256,12 @@
                 download: true,
                 header: true,
                 skipEmptyLines: true,
+                transformHeader: function(h) {
+                    return h
+                        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quita tildes
+                        .trim()
+                        .toLowerCase();
+                },
                 complete: function(results) {
                     if (!results.data || !results.data.length) {
                         setStatus('error', 'Sin datos');
