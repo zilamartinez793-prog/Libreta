@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -38,13 +37,11 @@
                     <h3 class="font-bold text-xl text-slate-900">Soy Alumno</h3>
                     <p class="text-sm text-slate-500">Ingresa tu cédula y consulta tu boletín al instante.</p>
                 </button>
-                <div class="bg-white p-8 rounded-3xl border border-slate-200 card-shadow text-left space-y-3">
+                <button onclick="enterAsTeacher()" class="bg-white p-8 rounded-3xl border border-slate-200 card-shadow hover:-translate-y-1 transition-all text-left space-y-3">
                     <i class="fa-solid fa-chalkboard-user text-3xl text-indigo-600"></i>
                     <h3 class="font-bold text-xl text-slate-900">Soy Docente</h3>
-                    <p class="text-sm text-slate-500 mb-2">Inicia sesión con tu cuenta de Google para gestionar las notas.</p>
-                    <div id="google-signin-button" class="flex justify-start"></div>
-                    <p id="docente-auth-error" class="text-xs text-rose-500 hidden">No se pudo iniciar sesión. Intenta de nuevo.</p>
-                </div>
+                    <p class="text-sm text-slate-500">Consulta el panel de analítica y la hoja completa de notas.</p>
+                </button>
             </div>
         </div>
     </div>
@@ -114,7 +111,6 @@
                 <div class="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                     <div class="space-y-4">
                         <h2 class="text-3xl font-bold">Panel de Analítica Docente</h2>
-                        <p id="docente-email" class="text-indigo-200 text-sm"></p>
                         <div class="flex flex-wrap gap-3">
                             <button onclick="cargarDatosDocente()" class="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-xl text-xs font-bold transition-all">
                                 <i class="fa-solid fa-arrows-rotate mr-1"></i> Actualizar notas
@@ -147,7 +143,7 @@
 
             <div class="bg-white rounded-3xl border border-slate-200 card-shadow overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-                    <h3 class="font-bold text-slate-800"><i class="fa-solid fa-table mr-2 text-indigo-500"></i>Excel completo (Google Sheet)</h3>
+                    <h3 class="font-bold text-slate-800"><i class="fa-solid fa-table mr-2 text-indigo-500"></i>Hoja completa (Google Sheet)</h3>
                     <span id="docente-load-status" class="text-xs text-slate-400"></span>
                 </div>
                 <div class="overflow-x-auto max-h-[500px]">
@@ -182,17 +178,13 @@
         // CONFIGURACIÓN — PEGA AQUÍ TUS DATOS
         // ============================================================
 
-        // 1) Enlace CSV publicado del Sheet (usado por la vista ALUMNO, sin login)
+        // 1) Enlace CSV publicado del Sheet usado por la vista ALUMNO
         //    Archivo > Compartir > Publicar en la web > pestaña > CSV > Publicar
         const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDQtI0G4ItU7lQwoDF_lKKz9QHeDHAJgx6limei517bEHC2Bn8ttwqL2oMtZAFd8sQlPW7p6ELTJ7i/pub?gid=380835456&single=true&output=csv";
 
-        // 2) Credenciales de Google OAuth (usadas por la vista DOCENTE)
-        //    Google Cloud Console > APIs y servicios > Credenciales
-        const GOOGLE_CLIENT_ID = "545358961090-56gltc4924pbmc2bl8fhh5gh2c1c0doc.apps.googleusercontent.com";
-
-        // 3) ID de la hoja de cálculo (de la URL, entre /d/ y /edit) y rango a leer
-        const SPREADSHEET_ID = "1Qkc9w_aZx3w2EX7xkLDSt1yDuGLwBOlT";
-        const SHEET_RANGE = "A1:Z200"; // ajusta el nombre de pestaña si aplica, ej. "Notas!A1:Z200"
+        // 2) Enlace CSV publicado del Sheet usado por la vista DOCENTE (hoja completa)
+        //    Puede ser la misma hoja u otra pestaña/gid distinto
+        const TEACHER_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2B5WaM5OrhAF4iuBn8CbSt3_UooBRXZBdA2YFAJ8FNiC3Xtx_Y8TBqjT3waI_Bc_sg393VAeoAZ7x/pub?gid=0&single=true&output=csv";
 
         // Columnas esperadas para el boletín del alumno (ajusta si tu hoja usa otros nombres):
         const COLUMN_MAP = {
@@ -210,8 +202,6 @@
 
         let studentData = fallbackData;
         let myChart = null;
-        let tokenClient = null;
-        let accessToken = null;
         let sheetRows = []; // filas crudas del Sheet (para la tabla docente)
 
         function num(v) {
@@ -342,93 +332,37 @@
             }
         }
 
-        // ---------- ROL: DOCENTE (Google OAuth + Sheets API) ----------
+        // ---------- ROL: DOCENTE (CSV publicado, sin login) ----------
 
-        function initGoogleSignIn() {
-            if (!window.google || !GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("PEGA_AQUI")) {
-                document.getElementById('google-signin-button').innerHTML =
-                    '<p class="text-xs text-rose-500">Configura GOOGLE_CLIENT_ID en el código para activar el login docente.</p>';
-                return;
-            }
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/userinfo.email',
-                callback: (response) => {
-                    if (response.error) {
-                        document.getElementById('docente-auth-error').classList.remove('hidden');
-                        return;
-                    }
-                    accessToken = response.access_token;
-                    onDocenteSignedIn();
-                }
-            });
-            const btn = document.createElement('button');
-            btn.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-3 rounded-xl text-sm flex items-center gap-2";
-            btn.innerHTML = '<i class="fa-brands fa-google"></i> Iniciar sesión con Google';
-            btn.onclick = () => tokenClient.requestAccessToken();
-            document.getElementById('google-signin-button').innerHTML = '';
-            document.getElementById('google-signin-button').appendChild(btn);
-        }
-
-        async function fetchUserEmail() {
-            try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                    headers: { Authorization: `Bearer ${accessToken}` }
-                });
-                const data = await res.json();
-                document.getElementById('docente-email').textContent = data.email ? `Sesión: ${data.email}` : '';
-            } catch (e) { /* no crítico */ }
-        }
-
-        function onDocenteSignedIn() {
-            document.getElementById('role-gate').classList.add('hidden');
-            document.getElementById('app-shell').classList.remove('hidden');
-            document.querySelectorAll('.nav-btn[data-role]').forEach(b => b.classList.add('hidden'));
-            document.getElementById('btn-docente').classList.remove('hidden');
-            fetchUserEmail();
-            showTab('docente');
-            cargarDatosDocente();
-        }
-
-        async function cargarDatosDocente() {
+        function cargarDatosDocente() {
             const statusEl = document.getElementById('docente-load-status');
-            if (!accessToken) return;
-            if (!SPREADSHEET_ID || SPREADSHEET_ID.startsWith("PEGA_AQUI")) {
-                statusEl.textContent = "Configura SPREADSHEET_ID en el código.";
+            if (!TEACHER_SHEET_CSV_URL || TEACHER_SHEET_CSV_URL === "PEGA_AQUI_TU_ENLACE_CSV") {
+                statusEl.textContent = "Configura TEACHER_SHEET_CSV_URL en el código.";
                 return;
             }
             statusEl.textContent = "Actualizando…";
-            try {
-                const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_RANGE)}`;
-                const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-                if (!res.ok) {
-                    let detail = '';
-                    try {
-                        const errJson = await res.json();
-                        detail = errJson?.error?.message || '';
-                    } catch (parseErr) { /* respuesta no era JSON */ }
-                    throw new Error(`Sheets API ${res.status}: ${detail}`);
+            Papa.parse(TEACHER_SHEET_CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (!results.data || !results.data.length) {
+                        statusEl.textContent = "Sin datos en la hoja.";
+                        return;
+                    }
+                    // Reconstruye filas "crudas" (encabezado + valores) para la tabla docente
+                    const headers = Object.keys(results.data[0]);
+                    sheetRows = [headers, ...results.data.map(row => headers.map(h => row[h] ?? ''))];
+                    renderSheetTable();
+                    studentData = results.data.map(normalizeRow).filter(r => r.cedula);
+                    updateSummaryStats();
+                    initChart();
+                    statusEl.textContent = "Actualizado " + new Date().toLocaleTimeString();
+                },
+                error: function(err) {
+                    statusEl.textContent = "Error: " + err.message;
                 }
-                const json = await res.json();
-                sheetRows = json.values || [];
-                renderSheetTable();
-                studentData = sheetRowsToStudents();
-                updateSummaryStats();
-                initChart();
-                statusEl.textContent = "Actualizado " + new Date().toLocaleTimeString();
-            } catch (e) {
-                statusEl.textContent = "Error: " + e.message;
-            }
-        }
-
-        function sheetRowsToStudents() {
-            if (sheetRows.length < 2) return [];
-            const headers = sheetRows[0].map(h => String(h).trim().toLowerCase());
-            return sheetRows.slice(1).map(r => {
-                const obj = {};
-                headers.forEach((h, i) => obj[h] = r[i]);
-                return normalizeRow(obj);
-            }).filter(r => r.cedula);
+            });
         }
 
         function renderSheetTable() {
@@ -511,17 +445,20 @@
             cargarDatosAlumno();
         }
 
+        function enterAsTeacher() {
+            document.getElementById('role-gate').classList.add('hidden');
+            document.getElementById('app-shell').classList.remove('hidden');
+            document.querySelectorAll('.nav-btn[data-role]').forEach(b => b.classList.add('hidden'));
+            document.getElementById('btn-docente').classList.remove('hidden');
+            showTab('docente');
+            cargarDatosDocente();
+        }
+
         function logout() {
-            accessToken = null;
             sheetRows = [];
             document.getElementById('app-shell').classList.add('hidden');
             document.getElementById('role-gate').classList.remove('hidden');
-            document.getElementById('docente-auth-error').classList.add('hidden');
         }
-
-        window.onload = function() {
-            initGoogleSignIn();
-        };
     </script>
 </body>
 </html>
