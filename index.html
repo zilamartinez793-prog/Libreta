@@ -401,7 +401,14 @@
             try {
                 const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_RANGE)}`;
                 const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-                if (!res.ok) throw new Error('Sheets API error ' + res.status);
+                if (!res.ok) {
+                    let detail = '';
+                    try {
+                        const errJson = await res.json();
+                        detail = errJson?.error?.message || '';
+                    } catch (parseErr) { /* respuesta no era JSON */ }
+                    throw new Error(`Sheets API ${res.status}: ${detail}`);
+                }
                 const json = await res.json();
                 sheetRows = json.values || [];
                 renderSheetTable();
@@ -410,7 +417,7 @@
                 initChart();
                 statusEl.textContent = "Actualizado " + new Date().toLocaleTimeString();
             } catch (e) {
-                statusEl.textContent = "Error al cargar. Verifica el ID de la hoja y permisos.";
+                statusEl.textContent = "Error: " + e.message;
             }
         }
 
