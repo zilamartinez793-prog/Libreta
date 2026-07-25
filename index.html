@@ -112,7 +112,7 @@
                     <div class="space-y-4">
                         <h2 class="text-3xl font-bold">Panel de Analítica Docente</h2>
                         <div class="flex flex-wrap gap-3">
-                            <button onclick="cargarDatosDocente()" class="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-xl text-xs font-bold transition-all">
+                            <button onclick="actualizarDatosDocente()" class="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-xl text-xs font-bold transition-all">
                                 <i class="fa-solid fa-arrows-rotate mr-1"></i> Actualizar notas
                             </button>
                         </div>
@@ -178,14 +178,10 @@
         // CONFIGURACIÓN — PEGA AQUÍ TUS DATOS
         // ============================================================
 
-        // 1) Enlace CSV publicado del Sheet usado por la vista ALUMNO
-        //    El alumno escribe su cédula y el código busca su fila dentro de este mismo archivo.
-        //    En pantalla solo se muestra la fila que coincide con su cédula, ninguna otra.
+        // Enlace CSV publicado del Sheet — se usa UNA SOLA VEZ y se comparte entre
+        // la vista de Alumno (busca su cédula dentro de estos datos) y la vista de Docente
+        // (muestra la hoja completa). No se vuelve a pedir el archivo por separado.
         const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSo_kMaLD16Vi8Yq-OBdRTdRUq85LykcvStmYAGN1_i8fUbWuS5B_NaszsrtYg5lxxGu7jwpiWrwei5/pub?gid=380835456&single=true&output=csv";
-
-        // 2) Enlace CSV publicado del Sheet usado por la vista DOCENTE (hoja completa)
-        //    Este es el que ya me diste (gid=380835456).
-        const TEACHER_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSo_kMaLD16Vi8Yq-OBdRTdRUq85LykcvStmYAGN1_i8fUbWuS5B_NaszsrtYg5lxxGu7jwpiWrwei5/pub?gid=380835456&single=true&output=csv";
 
         // Columnas esperadas para el boletín del alumno (ajusta si tu hoja usa otros nombres):
         const COLUMN_MAP = {
@@ -204,6 +200,7 @@
         let studentData = fallbackData;
         let myChart = null;
         let sheetRows = []; // filas crudas del Sheet (para la tabla docente)
+        let datosCargados = false; // evita volver a pedir el archivo si ya se cargó
 
         function num(v) {
             const n = parseFloat(v);
@@ -238,13 +235,23 @@
             badge.textContent = label;
         }
 
-        function cargarDatosAlumno() {
-            if (!SHEET_CSV_URL || SHEET_CSV_URL === "PEGA_AQUI_TU_ENLACE_CSV_VISTA_ALUMNO") {
+        // Carga el archivo UNA sola vez y llena tanto studentData (alumno) como
+        // sheetRows (tabla docente). Si ya se cargó antes, no vuelve a pedirlo:
+        // solo refresca las vistas con lo que ya está en memoria.
+        function cargarDatos(callback) {
+            if (datosCargados) {
+                if (callback) callback();
+                return;
+            }
+            if (!SHEET_CSV_URL || SHEET_CSV_URL === "PEGA_AQUI_TU_ENLACE_CSV") {
                 setStatus('error', 'Sin conectar');
                 studentData = fallbackData;
+                if (callback) callback();
                 return;
             }
             setStatus('loading', 'Conectando…');
+            const statusEl = document.getElementById('docente-load-status');
+            if (statusEl) statusEl.textContent = "Cargando…";
             Papa.parse(SHEET_CSV_URL, {
                 download: true,
                 header: true,
@@ -252,15 +259,25 @@
                 complete: function(results) {
                     if (!results.data || !results.data.length) {
                         setStatus('error', 'Sin datos');
+                        if (statusEl) statusEl.textContent = "Sin datos en la hoja.";
                         studentData = fallbackData;
                     } else {
+                        // Datos para el alumno (busca por cédula)
                         studentData = results.data.map(normalizeRow).filter(r => r.cedula);
+                        // Filas crudas para la tabla docente
+                        const headers = Object.keys(results.data[0]);
+                        sheetRows = [headers, ...results.data.map(row => headers.map(h => row[h] ?? ''))];
+                        datosCargados = true;
                         setStatus('ok', 'Activo');
+                        if (statusEl) statusEl.textContent = "Actualizado " + new Date().toLocaleTimeString();
                     }
+                    if (callback) callback();
                 },
-                error: function() {
+                error: function(err) {
                     setStatus('error', 'Error de conexión');
+                    if (statusEl) statusEl.textContent = "Error: " + err.message;
                     studentData = fallbackData;
+                    if (callback) callback();
                 }
             });
         }
@@ -269,6 +286,10 @@
             const input = document.getElementById('student-search-input').value.trim();
             const resultBox = document.getElementById('boletin-result');
             if (!input) return alert("Ingresa una cédula válida");
+
+            if (!datosCargados) {
+                return alert("Los datos todavía se están cargando (o no se pudieron conectar). Espera un momento y vuelve a intentar; revisa el 'Estado de datos' arriba del recuadro.");
+            }
 
             const estudiante = studentData.find(e => e.cedula === input || e.cedula.replace(/-/g, '') === input.replace(/-/g, ''));
 
@@ -335,35 +356,19 @@
 
         // ---------- ROL: DOCENTE (CSV publicado, sin login) ----------
 
+        // Muestra el panel docente con los datos ya cargados (o los pide si aún no existen)
         function cargarDatosDocente() {
-            const statusEl = document.getElementById('docente-load-status');
-            if (!TEACHER_SHEET_CSV_URL || TEACHER_SHEET_CSV_URL === "PEGA_AQUI_TU_ENLACE_CSV") {
-                statusEl.textContent = "Configura TEACHER_SHEET_CSV_URL en el código.";
-                return;
-            }
-            statusEl.textContent = "Actualizando…";
-            Papa.parse(TEACHER_SHEET_CSV_URL, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if (!results.data || !results.data.length) {
-                        statusEl.textContent = "Sin datos en la hoja.";
-                        return;
-                    }
-                    // Reconstruye filas "crudas" (encabezado + valores) para la tabla docente
-                    const headers = Object.keys(results.data[0]);
-                    sheetRows = [headers, ...results.data.map(row => headers.map(h => row[h] ?? ''))];
-                    renderSheetTable();
-                    studentData = results.data.map(normalizeRow).filter(r => r.cedula);
-                    updateSummaryStats();
-                    initChart();
-                    statusEl.textContent = "Actualizado " + new Date().toLocaleTimeString();
-                },
-                error: function(err) {
-                    statusEl.textContent = "Error: " + err.message;
-                }
+            cargarDatos(function() {
+                renderSheetTable();
+                updateSummaryStats();
+                initChart();
             });
+        }
+
+        // Fuerza una recarga real desde el CSV (botón "Actualizar notas")
+        function actualizarDatosDocente() {
+            datosCargados = false;
+            cargarDatosDocente();
         }
 
         function renderSheetTable() {
@@ -443,7 +448,7 @@
             document.querySelectorAll('.nav-btn[data-role]').forEach(b => b.classList.add('hidden'));
             document.getElementById('btn-estudiantes').classList.remove('hidden');
             showTab('estudiantes');
-            cargarDatosAlumno();
+            cargarDatos();
         }
 
         function enterAsTeacher() {
