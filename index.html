@@ -284,9 +284,7 @@
   </div>
 </div>
 
-<button class="teacher-link" id="teacherToggle">¿Eres profesor? Cargar planilla de notas</button>
-
-<div class="teacher-panel hidden" id="teacherPanel">
+<div class="teacher-panel" id="teacherPanel">
   <div id="pinGate">
     <h2>Acceso de profesor</h2>
     <p>Ingresa el PIN para cargar o reemplazar la planilla de notas.</p>
@@ -320,7 +318,6 @@ const searchBtn = document.getElementById('searchBtn');
 const resultArea = document.getElementById('resultArea');
 const paperCard = document.getElementById('paperCard');
 
-const teacherToggle = document.getElementById('teacherToggle');
 const teacherPanel = document.getElementById('teacherPanel');
 const pinGate = document.getElementById('pinGate');
 const pinInput = document.getElementById('pinInput');
@@ -342,7 +339,16 @@ function normalizeCedula(str){
   return String(str ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');
 }
 
+function storageAvailable(){
+  return typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function';
+}
+
 async function loadSharedData(){
+  if(!storageAvailable()){
+    hint.innerHTML = '⚠️ Esta página no está abierta en el entorno correcto. Debes usar el <b>enlace publicado</b> de Claude (no el archivo .html descargado ni abrirlo como archivo local) para que las notas se guarden y compartan correctamente.';
+    searchBtn.disabled = true;
+    return;
+  }
   try{
     const res = await window.storage.get(STORAGE_KEY, true);
     if(res && res.value){
@@ -471,10 +477,11 @@ searchBtn.addEventListener('click', ()=>{
 });
 cedulaInput.addEventListener('keydown', e=>{ if(e.key==='Enter') searchBtn.click(); });
 
-// Teacher panel
-teacherToggle.addEventListener('click', ()=>{
-  teacherPanel.classList.toggle('hidden');
-});
+// Teacher panel — solo se muestra si el enlace incluye ?profe=1
+const params = new URLSearchParams(window.location.search);
+if(params.get('profe') === '1'){
+  teacherPanel.classList.remove('hidden');
+}
 
 pinBtn.addEventListener('click', ()=>{
   if(pinInput.value === TEACHER_PIN){
@@ -491,6 +498,10 @@ dropzone.addEventListener('click', ()=> fileInput.click());
 fileInput.addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
+  if(!storageAvailable()){
+    loadStatus.innerHTML = `<div class="load-status">⚠️ No se puede guardar aquí. Abre el <b>enlace publicado</b> de Claude (no el archivo descargado) e intenta de nuevo.</div>`;
+    return;
+  }
   loadStatus.innerHTML = `<div class="load-status">Leyendo archivo...</div>`;
   try{
     const buf = await file.arrayBuffer();
