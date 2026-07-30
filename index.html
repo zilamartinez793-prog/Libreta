@@ -546,7 +546,8 @@ fileInput.addEventListener('change', async (e)=>{
     renderStatus();
     renderLoadStatus();
   }catch(err){
-    loadStatus.innerHTML = `<div class="load-status">⚠️ No se pudo guardar. Verifica que el archivo sea un Excel válido y que las reglas de Firestore permitan escribir con este PIN.</div>`;
+    console.error('Error al guardar en Firestore:', err);
+    loadStatus.innerHTML = `<div class="load-status">⚠️ No se pudo guardar. Detalle: ${escapeHtml(err.message || String(err))}</div>`;
   }
 });
 
