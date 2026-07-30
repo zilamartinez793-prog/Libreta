@@ -1,476 +1,544 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Libreta Digital Escolar | Portal Interactivo</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #faf9f6; }
-        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 350px; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .glass-effect { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); }
-        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consulta de Notas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#16302A;
+    --bg-deep:#0E211C;
+    --paper:#FBF8F1;
+    --paper-line:#E4DCC8;
+    --ink:#1C2521;
+    --ink-soft:#4A544D;
+    --chalk-yellow:#E8B93A;
+    --pen-red:#B23A2E;
+    --pen-green:#2F6B4F;
+    --pen-blue:#2B4C6F;
+    --muted:#9FB0A8;
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font-body);
+    background:
+      radial-gradient(circle at 15% 10%, rgba(255,255,255,0.03), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(255,255,255,0.03), transparent 40%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    color:var(--paper);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 60px;
+  }
+  .board{width:100%;max-width:520px;position:relative;}
+  .paper{
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:6px;
+    padding:36px 28px 30px;
+    position:relative;
+    box-shadow:0 20px 50px rgba(0,0,0,0.35), 0 2px 0 rgba(255,255,255,0.4) inset;
+    background-image: repeating-linear-gradient(180deg, transparent, transparent 27px, var(--paper-line) 28px);
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--pen-blue);
+    font-weight:600;
+  }
+  h1{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:30px;
+    margin:6px 0 8px;
+    line-height:1.1;
+  }
+  .subtitle{
+    font-size:14px;
+    color:var(--ink-soft);
+    margin:0 0 22px;
+    line-height:1.5;
+  }
+  .subtitle.status{
+    font-family:var(--font-mono);
+    font-size:12px;
+    margin-top:4px;
+  }
+  .search-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:6px;
+  }
+  #cedulaInput{
+    flex:1;
+    font-family:var(--font-mono);
+    font-size:16px;
+    padding:13px 14px;
+    border:1.5px solid var(--paper-line);
+    border-radius:5px;
+    background:#fff;
+    color:var(--ink);
+    outline:none;
+  }
+  #cedulaInput:focus{
+    border-color:var(--pen-blue);
+  }
+  button{
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    border:none;
+    border-radius:5px;
+  }
+  #searchBtn{
+    background:var(--pen-blue);
+    color:#fff;
+    padding:0 20px;
+  }
+  #searchBtn:hover{background:#1f3a54;}
+  #searchBtn:disabled{background:#9aa7ad;cursor:not-allowed;}
+  .hint{font-size:12px;color:var(--ink-soft);margin:8px 0 0;}
+  #resultArea{margin-top:20px;}
+  .student-name{
+    font-family:var(--font-display);
+    font-size:20px;
+    font-weight:600;
+    margin-bottom:14px;
+  }
+  table.grades{
+    width:100%;
+    border-collapse:collapse;
+    font-family:var(--font-mono);
+    font-size:14px;
+  }
+  table.grades td, table.grades th{
+    text-align:left;
+    padding:9px 4px;
+    border-bottom:1px solid var(--paper-line);
+  }
+  table.grades th{
+    font-family:var(--font-body);
+    font-weight:600;
+    color:var(--ink-soft);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  .badge{
+    display:inline-block;
+    min-width:38px;
+    text-align:center;
+    padding:3px 8px;
+    border-radius:4px;
+    font-weight:600;
+    color:#fff;
+  }
+  .badge.good{background:var(--pen-green);}
+  .badge.warn{background:var(--chalk-yellow); color:#3a2c05;}
+  .badge.bad{background:var(--pen-red);}
+  .badge.neutral{background:#7d8a83;}
+  .empty-state{
+    font-size:14px;
+    color:var(--ink-soft);
+    text-align:center;
+    padding:20px 6px;
+    border:1.5px dashed var(--paper-line);
+    border-radius:6px;
+  }
+  .stamp{
+    position:absolute;
+    top:-14px;
+    right:-10px;
+    width:92px;
+    height:92px;
+    border-radius:50%;
+    border:2.5px dashed var(--pen-red);
+    color:var(--pen-red);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    transform:rotate(-9deg);
+    background:rgba(178,58,46,0.05);
+    opacity:0.92;
+  }
+  .stamp .num{
+    font-family:var(--font-display);
+    font-size:26px;
+    font-weight:700;
+    line-height:1;
+  }
+  .stamp .lbl{
+    font-family:var(--font-mono);
+    font-size:8px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    margin-top:2px;
+  }
+  .teacher-link{
+    background:none;
+    color:var(--muted);
+    font-size:12px;
+    margin-top:22px;
+    text-decoration:underline;
+    text-underline-offset:3px;
+  }
+  .teacher-link:hover{color:var(--paper);}
+  .teacher-panel{
+    width:100%;
+    max-width:520px;
+    margin-top:14px;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.14);
+    border-radius:8px;
+    padding:20px 20px 22px;
+  }
+  .teacher-panel.hidden{display:none;}
+  .teacher-panel h2{
+    font-family:var(--font-display);
+    font-size:18px;
+    margin:0 0 4px;
+    color:var(--paper);
+  }
+  .teacher-panel p{
+    font-size:13px;
+    color:var(--muted);
+    margin:0 0 14px;
+    line-height:1.5;
+  }
+  .pin-row{display:flex;gap:8px;}
+  #pinInput{
+    flex:1;
+    font-family:var(--font-mono);
+    font-size:15px;
+    padding:11px 12px;
+    border-radius:5px;
+    border:1px solid rgba(255,255,255,0.2);
+    background:rgba(255,255,255,0.9);
+    color:var(--ink);
+    outline:none;
+  }
+  #pinBtn{background:var(--chalk-yellow); color:#3a2c05; padding:0 16px;}
+  #pinBtn:hover{background:#d9a827;}
+  .pin-error{color:#f0a6a0; font-size:12px; margin-top:8px;}
+  .dropzone{
+    border:1.5px dashed rgba(255,255,255,0.3);
+    border-radius:6px;
+    padding:24px 14px;
+    text-align:center;
+    font-size:13px;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .dropzone:hover{border-color:var(--chalk-yellow); color:var(--paper);}
+  .dropzone input{display:none;}
+  .load-status{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    color:var(--paper);
+    background:rgba(255,255,255,0.08);
+    border-radius:5px;
+    padding:10px 12px;
+    margin-top:12px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+  #clearBtn{background:transparent; color:#f0a6a0; text-decoration:underline; font-size:12px; padding:0;}
+  .foot-note{font-size:11px; color:var(--muted); text-align:center; margin-top:26px; line-height:1.6;}
+  @media (max-width:400px){
+    .paper{padding:28px 18px 24px;}
+    h1{font-size:25px;}
+    .stamp{width:76px;height:76px; top:-10px; right:-8px;}
+    .stamp .num{font-size:21px;}
+  }
+</style>
 </head>
-<body class="text-slate-800">
+<body>
 
-    <!-- PANTALLA DE ACCESO POR ROL -->
-    <div id="role-gate" class="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-indigo-50 via-white to-slate-50">
-        <div class="max-w-3xl w-full space-y-8 text-center">
-            <div class="space-y-3">
-                <div class="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-white shadow-lg">
-                    <i class="fa-solid fa-graduation-cap text-2xl"></i>
-                </div>
-                <h1 class="text-3xl font-black text-slate-900">Libreta Digital Escolar</h1>
-                <p class="text-slate-500">¿Cómo deseas ingresar?</p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <button onclick="enterAsStudent()" class="bg-white p-8 rounded-3xl border border-slate-200 card-shadow hover:-translate-y-1 transition-all text-left space-y-3">
-                    <i class="fa-solid fa-user-graduate text-3xl text-indigo-600"></i>
-                    <h3 class="font-bold text-xl text-slate-900">Soy Alumno</h3>
-                    <p class="text-sm text-slate-500">Ingresa tu cédula y consulta tu boletín al instante.</p>
-                </button>
-                <button onclick="enterAsTeacher()" class="bg-white p-8 rounded-3xl border border-slate-200 card-shadow hover:-translate-y-1 transition-all text-left space-y-3">
-                    <i class="fa-solid fa-chalkboard-user text-3xl text-indigo-600"></i>
-                    <h3 class="font-bold text-xl text-slate-900">Soy Docente</h3>
-                    <p class="text-sm text-slate-500">Consulta el panel de analítica y la hoja completa de notas.</p>
-                </button>
-            </div>
-        </div>
+<div class="board">
+  <div class="paper" id="paperCard">
+    <span class="eyebrow">Boletín escolar</span>
+    <h1>Consulta tus notas</h1>
+    <p class="subtitle" id="subtitle">Escribe tu número de cédula para ver tus calificaciones.</p>
+    <div class="search-row">
+      <input id="cedulaInput" placeholder="Ej: 8-123-4567" autocomplete="off">
+      <button id="searchBtn">Ver notas</button>
     </div>
+    <p class="hint" id="hint"></p>
+    <div id="resultArea"></div>
+  </div>
+</div>
 
-    <!-- APP (oculta hasta elegir rol) -->
-    <div id="app-shell" class="hidden">
+<button class="teacher-link" id="teacherToggle">¿Eres profesor? Cargar planilla de notas</button>
 
-    <!-- Navegación -->
-    <nav class="sticky top-0 z-50 glass-effect border-b border-slate-200">
-        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
-            <div class="flex items-center gap-2">
-                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-                    <i class="fa-solid fa-graduation-cap text-xl"></i>
-                </div>
-                <div>
-                    <span class="font-extrabold text-lg tracking-tight text-slate-900 block leading-none">Libreta Digital</span>
-                    <span class="text-[10px] uppercase text-indigo-500 font-bold tracking-widest">Sistema de Gestión</span>
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                <div class="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
-                    <button onclick="showTab('estudiantes')" data-role="alumno" class="nav-btn px-4 py-2 rounded-xl text-xs font-bold transition-all text-slate-500" id="btn-estudiantes">ALUMNOS</button>
-                    <button onclick="showTab('docente')" data-role="docente" class="nav-btn px-4 py-2 rounded-xl text-xs font-bold transition-all text-slate-500" id="btn-docente">DOCENTE</button>
-                </div>
-                <button onclick="logout()" class="text-xs font-bold text-slate-400 hover:text-rose-500 transition-colors px-3 py-2">
-                    <i class="fa-solid fa-right-from-bracket mr-1"></i> Salir
-                </button>
-            </div>
-        </div>
-    </nav>
+<div class="teacher-panel hidden" id="teacherPanel">
+  <div id="pinGate">
+    <h2>Acceso de profesor</h2>
+    <p>Ingresa el PIN para cargar o reemplazar la planilla de notas.</p>
+    <div class="pin-row">
+      <input id="pinInput" type="password" placeholder="PIN" inputmode="numeric">
+      <button id="pinBtn">Entrar</button>
+    </div>
+    <p class="pin-error" id="pinError" style="display:none;">PIN incorrecto. Intenta de nuevo.</p>
+  </div>
+  <div id="uploadArea" class="hidden">
+    <h2>Cargar planilla</h2>
+    <p>Sube un archivo Excel (.xlsx). La primera fila debe tener los encabezados: una columna de <b>cédula</b>, opcionalmente <b>nombre</b>, y luego una columna por cada materia con la nota.</p>
+    <label class="dropzone" id="dropzone">
+      📄 Toca para elegir el archivo Excel
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    </label>
+    <div id="loadStatus"></div>
+  </div>
+</div>
 
-    <main class="max-w-6xl mx-auto px-4 py-8">
+<p class="foot-note">Los datos de la planilla se guardan de forma compartida para que cada estudiante pueda consultarlos desde este mismo enlace.</p>
 
-        <!-- SECCIÓN ESTUDIANTES -->
-        <section id="content-estudiantes" class="tab-content active space-y-8">
-            <div class="max-w-md mx-auto flex items-center justify-between bg-white px-4 py-2 rounded-2xl border border-slate-200 text-xs">
-                <span class="font-semibold text-slate-500">Estado de datos:</span>
-                <span id="status-badge" class="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase">Conectando…</span>
-            </div>
-            <div class="max-w-2xl mx-auto text-center space-y-4">
-                <div class="inline-flex p-3 bg-amber-50 text-amber-600 rounded-2xl border border-amber-100">
-                    <i class="fa-solid fa-user-lock text-2xl"></i>
-                </div>
-                <h2 class="text-3xl font-extrabold text-slate-900">Portal de Consulta Privada</h2>
-                <p class="text-slate-500">Ingresa tu número de cédula para generar tu libreta digital actualizada al instante.</p>
-            </div>
+<script>
+const TEACHER_PIN = "2026"; // el profesor puede cambiar este PIN editando el archivo
+const STORAGE_KEY = "boletin:data";
 
-            <div class="max-w-md mx-auto bg-white p-6 rounded-3xl border border-slate-200 card-shadow">
-                <div class="relative group">
-                    <input type="text" id="student-search-input" placeholder="Ej: 8-888-8888" class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-lg transition-all">
-                    <i class="fa-solid fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"></i>
-                </div>
-                <button onclick="consultarBoletin()" class="w-full mt-4 bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-black transition-all flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-magnifying-glass"></i> Obtener mi Boletín
-                </button>
-                <p id="load-status" class="text-xs text-slate-400 text-center mt-3"></p>
-            </div>
+const subtitle = document.getElementById('subtitle');
+const hint = document.getElementById('hint');
+const cedulaInput = document.getElementById('cedulaInput');
+const searchBtn = document.getElementById('searchBtn');
+const resultArea = document.getElementById('resultArea');
+const paperCard = document.getElementById('paperCard');
 
-            <div id="boletin-result" class="hidden max-w-4xl mx-auto space-y-6 animate-fade-in">
-                <!-- El boletín se inyecta aquí por JS -->
-            </div>
-        </section>
+const teacherToggle = document.getElementById('teacherToggle');
+const teacherPanel = document.getElementById('teacherPanel');
+const pinGate = document.getElementById('pinGate');
+const pinInput = document.getElementById('pinInput');
+const pinBtn = document.getElementById('pinBtn');
+const pinError = document.getElementById('pinError');
+const uploadArea = document.getElementById('uploadArea');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const loadStatus = document.getElementById('loadStatus');
 
-        <!-- SECCIÓN DOCENTE -->
-        <section id="content-docente" class="tab-content space-y-10">
-            <div class="bg-indigo-900 rounded-3xl p-8 text-white relative overflow-hidden">
-                <div class="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                    <div class="space-y-4">
-                        <h2 class="text-3xl font-bold">Panel de Analítica Docente</h2>
-                        <div class="flex flex-wrap gap-3">
-                            <button onclick="actualizarDatosDocente()" class="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-xl text-xs font-bold transition-all">
-                                <i class="fa-solid fa-arrows-rotate mr-1"></i> Actualizar notas
-                            </button>
-                        </div>
-                    </div>
-                    <div class="bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10 text-center">
-                        <p class="text-xs uppercase tracking-widest text-indigo-300 font-bold mb-4">Rendimiento Académico del Grupo</p>
-                        <div class="chart-container">
-                            <canvas id="performanceChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
+let currentData = null;
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div class="bg-white p-6 rounded-2xl border border-slate-200 card-shadow flex items-center gap-4">
-                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-xl"><i class="fa-solid fa-users"></i></div>
-                    <div><p class="text-xs text-slate-400 font-bold uppercase">Total Alumnos</p><p id="docente-total" class="text-2xl font-black text-slate-800">--</p></div>
-                </div>
-                <div class="bg-white p-6 rounded-2xl border border-slate-200 card-shadow flex items-center gap-4">
-                    <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-xl"><i class="fa-solid fa-chart-line"></i></div>
-                    <div><p class="text-xs text-slate-400 font-bold uppercase">Promedio Grupal</p><p id="docente-promedio" class="text-2xl font-black text-slate-800">--</p></div>
-                </div>
-                <div class="bg-white p-6 rounded-2xl border border-slate-200 card-shadow flex items-center gap-4">
-                    <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-xl"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                    <div><p class="text-xs text-slate-400 font-bold uppercase">Reprobados</p><p id="docente-reprobados" class="text-2xl font-black text-slate-800">--</p></div>
-                </div>
-            </div>
+function normalize(str){
+  return String(str ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().trim();
+}
+function normalizeCedula(str){
+  return String(str ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
 
-            <div class="bg-white rounded-3xl border border-slate-200 card-shadow overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-                    <h3 class="font-bold text-slate-800"><i class="fa-solid fa-table mr-2 text-indigo-500"></i>Hoja completa (Google Sheet)</h3>
-                    <span id="docente-load-status" class="text-xs text-slate-400"></span>
-                </div>
-                <div class="overflow-x-auto max-h-[500px]">
-                    <table class="min-w-full text-sm">
-                        <thead class="bg-slate-50 sticky top-0" id="sheet-table-head"></thead>
-                        <tbody id="sheet-table-body" class="divide-y divide-slate-100"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
+async function loadSharedData(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, true);
+    if(res && res.value){
+      currentData = JSON.parse(res.value);
+      renderStatus();
+    } else {
+      currentData = null;
+      renderStatus();
+    }
+  }catch(e){
+    currentData = null;
+    renderStatus();
+  }
+}
 
-    </main>
+function renderStatus(){
+  if(currentData && currentData.rows && currentData.rows.length){
+    const d = new Date(currentData.uploadedAt);
+    const fecha = isNaN(d) ? '' : d.toLocaleDateString('es-PA', {day:'2-digit', month:'2-digit', year:'numeric'});
+    hint.textContent = `Planilla cargada · ${currentData.rows.length} estudiantes · ${fecha}`;
+    searchBtn.disabled = false;
+  } else {
+    hint.textContent = 'Aún no se ha cargado ninguna planilla. Pide a tu profesor que la cargue.';
+    searchBtn.disabled = false;
+  }
+}
 
-    </div> <!-- /app-shell -->
+function detectColumns(headers){
+  const cedulaKeys = ['cedula','ci','dni','identificacion','documento','id'];
+  const nombreKeys = ['nombre','estudiante','alumno'];
+  let cedulaIdx = -1, nombreIdx = -1;
+  headers.forEach((h,i)=>{
+    const n = normalize(h);
+    if(cedulaIdx===-1 && cedulaKeys.some(k=>n.includes(k))) cedulaIdx = i;
+    if(nombreIdx===-1 && nombreKeys.some(k=>n.includes(k))) nombreIdx = i;
+  });
+  if(cedulaIdx===-1) cedulaIdx = 0;
+  return {cedulaIdx, nombreIdx};
+}
 
-    <footer class="bg-white border-t border-slate-200 py-10 mt-20">
-        <div class="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div class="text-center md:text-left">
-                <p class="font-bold text-slate-900">Libreta Digital Interactiva</p>
-                <p class="text-xs text-slate-400">© 2024 Gestión Educativa Moderna - Todos los derechos reservados</p>
-            </div>
-            <div class="flex gap-4">
-                <div class="p-2 bg-slate-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"><i class="fa-brands fa-github text-xl"></i></div>
-                <div class="p-2 bg-slate-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"><i class="fa-brands fa-twitter text-xl"></i></div>
-                <div class="p-2 bg-slate-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"><i class="fa-solid fa-envelope text-xl"></i></div>
-            </div>
-        </div>
-    </footer>
+function guessScale(headers, rows, cedulaIdx, nombreIdx){
+  let max = 0;
+  rows.forEach(r=>{
+    r.forEach((v,i)=>{
+      if(i===cedulaIdx || i===nombreIdx) return;
+      const n = parseFloat(v);
+      if(!isNaN(n) && n>max) max = n;
+    });
+  });
+  return max <= 5.5 ? {max:5, pass:3} : {max:100, pass:60};
+}
 
-    <script>
-        // ============================================================
-        // CONFIGURACIÓN — PEGA AQUÍ TUS DATOS
-        // ============================================================
+function badgeClass(value, scale){
+  const n = parseFloat(value);
+  if(isNaN(n)) return 'neutral';
+  if(n >= scale.pass) {
+    const highThreshold = scale.max===5 ? 4 : 80;
+    return n >= highThreshold ? 'good' : 'warn';
+  }
+  return 'bad';
+}
 
-        // Enlace CSV publicado del Sheet — se usa UNA SOLA VEZ y se comparte entre
-        // la vista de Alumno (busca su cédula dentro de estos datos) y la vista de Docente
-        // (muestra la hoja completa). No se vuelve a pedir el archivo por separado.
-        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSo_kMaLD16Vi8Yq-OBdRTdRUq85LykcvStmYAGN1_i8fUbWuS5B_NaszsrtYg5lxxGu7jwpiWrwei5/pub?gid=380835456&single=true&output=csv";
+function findStudent(cedula){
+  if(!currentData || !currentData.rows) return null;
+  const target = normalizeCedula(cedula);
+  const {cedulaIdx} = currentData;
+  return currentData.rows.find(r => normalizeCedula(r[cedulaIdx]) === target) || null;
+}
 
-        // Columnas esperadas para el boletín del alumno (ajusta si tu hoja usa otros nombres):
-        const COLUMN_MAP = {
-            cedula: "cedula", nombre: "nombre",
-            d1: "d1", d2: "d2", d3: "d3", d4: "d4", d5: "d5", d6: "d6",
-            asistencia: "asistencia", apr2: "apr2", apr3: "apr3", apr4: "apr4",
-            examen: "examen", promedio: "promedio"
-        };
+function renderResult(row){
+  resultArea.innerHTML = '';
+  // remove existing stamp
+  const oldStamp = paperCard.querySelector('.stamp');
+  if(oldStamp) oldStamp.remove();
 
-        // Datos de respaldo (se usan si aún no configuras el CSV o falla la carga)
-        const fallbackData = [
-            { cedula: "8-888-8888", nombre: "Ana Sofía Rodríguez", d1: 4.8, d2: 5.0, d3: 4.5, d4: 4.2, d5: 4.9, d6: 5.0, asistencia: 5.0, apr2: 4.8, apr3: 4.7, apr4: 5.0, examen: 4.8, promedio: 4.8 },
-            { cedula: "2-759-1097", nombre: "Carlos Eduardo Mendoza", d1: 3.5, d2: 4.0, d3: 3.8, d4: 4.2, d5: 3.0, d6: 4.1, asistencia: 4.5, apr2: 4.0, apr3: 3.9, apr4: 4.2, examen: 4.0, promedio: 3.9 }
-        ];
+  if(!row){
+    resultArea.innerHTML = `<div class="empty-state">No encontramos esa cédula en la planilla cargada. Verifica el número e intenta de nuevo.</div>`;
+    return;
+  }
 
-        let studentData = fallbackData;
-        let myChart = null;
-        let sheetRows = []; // filas crudas del Sheet (para la tabla docente)
-        let datosCargados = false; // evita volver a pedir el archivo si ya se cargó
+  const {headers, cedulaIdx, nombreIdx, scale} = currentData;
+  const nombre = nombreIdx>=0 ? row[nombreIdx] : '';
 
-        function num(v) {
-            const n = parseFloat(v);
-            return isNaN(n) ? 0 : n;
-        }
+  let html = '';
+  if(nombre) html += `<div class="student-name">${escapeHtml(nombre)}</div>`;
+  html += `<table class="grades"><thead><tr><th>Materia</th><th>Nota</th></tr></thead><tbody>`;
 
-        function normalizeRow(row) {
-            return {
-                cedula: String(row[COLUMN_MAP.cedula] ?? "").trim(),
-                nombre: String(row[COLUMN_MAP.nombre] ?? "").trim(),
-                d1: num(row[COLUMN_MAP.d1]), d2: num(row[COLUMN_MAP.d2]), d3: num(row[COLUMN_MAP.d3]),
-                d4: num(row[COLUMN_MAP.d4]), d5: num(row[COLUMN_MAP.d5]), d6: num(row[COLUMN_MAP.d6]),
-                asistencia: num(row[COLUMN_MAP.asistencia]),
-                apr2: num(row[COLUMN_MAP.apr2]), apr3: num(row[COLUMN_MAP.apr3]), apr4: num(row[COLUMN_MAP.apr4]),
-                examen: num(row[COLUMN_MAP.examen]),
-                promedio: num(row[COLUMN_MAP.promedio])
-            };
-        }
+  let sum = 0, count = 0;
+  headers.forEach((h,i)=>{
+    if(i===cedulaIdx || i===nombreIdx) return;
+    const val = row[i];
+    if(val === undefined || val === '') return;
+    const cls = badgeClass(val, scale);
+    const n = parseFloat(val);
+    if(!isNaN(n)){ sum += n; count++; }
+    html += `<tr><td>${escapeHtml(h)}</td><td><span class="badge ${cls}">${escapeHtml(val)}</span></td></tr>`;
+  });
+  html += `</tbody></table>`;
+  resultArea.innerHTML = html;
 
-        // ---------- ROL: ALUMNO ----------
+  if(count>0){
+    const avg = (sum/count).toFixed(1);
+    const stamp = document.createElement('div');
+    stamp.className = 'stamp';
+    stamp.innerHTML = `<span class="num">${avg}</span><span class="lbl">Promedio</span>`;
+    paperCard.appendChild(stamp);
+  }
+}
 
-        function setStatus(state, label) {
-            const badge = document.getElementById('status-badge');
-            if (!badge) return;
-            const styles = {
-                loading: ["bg-amber-100", "text-amber-700"],
-                ok: ["bg-emerald-100", "text-emerald-700"],
-                error: ["bg-rose-100", "text-rose-700"]
-            };
-            const [bg, txt] = styles[state];
-            badge.className = `px-3 py-1 ${bg} ${txt} rounded-full text-[10px] font-black uppercase`;
-            badge.textContent = label;
-        }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
-        // Carga el archivo UNA sola vez y llena tanto studentData (alumno) como
-        // sheetRows (tabla docente). Si ya se cargó antes, no vuelve a pedirlo:
-        // solo refresca las vistas con lo que ya está en memoria.
-        function cargarDatos(callback) {
-            if (datosCargados) {
-                if (callback) callback();
-                return;
-            }
-            if (!SHEET_CSV_URL || SHEET_CSV_URL === "PEGA_AQUI_TU_ENLACE_CSV") {
-                setStatus('error', 'Sin conectar');
-                studentData = fallbackData;
-                if (callback) callback();
-                return;
-            }
-            setStatus('loading', 'Conectando…');
-            const statusEl = document.getElementById('docente-load-status');
-            if (statusEl) statusEl.textContent = "Cargando…";
-            Papa.parse(SHEET_CSV_URL, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                transformHeader: function(h) {
-                    return h
-                        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quita tildes
-                        .trim()
-                        .toLowerCase();
-                },
-                complete: function(results) {
-                    if (!results.data || !results.data.length) {
-                        setStatus('error', 'Sin datos');
-                        if (statusEl) statusEl.textContent = "Sin datos en la hoja.";
-                        studentData = fallbackData;
-                    } else {
-                        // Datos para el alumno (busca por cédula)
-                        studentData = results.data.map(normalizeRow).filter(r => r.cedula);
-                        // Filas crudas para la tabla docente
-                        const headers = Object.keys(results.data[0]);
-                        sheetRows = [headers, ...results.data.map(row => headers.map(h => row[h] ?? ''))];
-                        datosCargados = true;
-                        setStatus('ok', 'Activo');
-                        if (statusEl) statusEl.textContent = "Actualizado " + new Date().toLocaleTimeString();
-                    }
-                    if (callback) callback();
-                },
-                error: function(err) {
-                    setStatus('error', 'Error de conexión');
-                    if (statusEl) statusEl.textContent = "Error: " + err.message;
-                    studentData = fallbackData;
-                    if (callback) callback();
-                }
-            });
-        }
+searchBtn.addEventListener('click', ()=>{
+  const val = cedulaInput.value.trim();
+  if(!val){
+    resultArea.innerHTML = `<div class="empty-state">Escribe tu número de cédula arriba.</div>`;
+    return;
+  }
+  if(!currentData || !currentData.rows || !currentData.rows.length){
+    resultArea.innerHTML = `<div class="empty-state">Todavía no hay ninguna planilla cargada.</div>`;
+    return;
+  }
+  const row = findStudent(val);
+  renderResult(row);
+});
+cedulaInput.addEventListener('keydown', e=>{ if(e.key==='Enter') searchBtn.click(); });
 
-        function consultarBoletin() {
-            const input = document.getElementById('student-search-input').value.trim();
-            const resultBox = document.getElementById('boletin-result');
-            if (!input) return alert("Ingresa una cédula válida");
+// Teacher panel
+teacherToggle.addEventListener('click', ()=>{
+  teacherPanel.classList.toggle('hidden');
+});
 
-            if (!datosCargados) {
-                return alert("Los datos todavía se están cargando (o no se pudieron conectar). Espera un momento y vuelve a intentar; revisa el 'Estado de datos' arriba del recuadro.");
-            }
+pinBtn.addEventListener('click', ()=>{
+  if(pinInput.value === TEACHER_PIN){
+    pinGate.classList.add('hidden');
+    uploadArea.classList.remove('hidden');
+    renderLoadStatus();
+  } else {
+    pinError.style.display = 'block';
+  }
+});
+pinInput.addEventListener('keydown', e=>{ if(e.key==='Enter') pinBtn.click(); });
 
-            const estudiante = studentData.find(e => e.cedula === input || e.cedula.replace(/-/g, '') === input.replace(/-/g, ''));
+dropzone.addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  loadStatus.innerHTML = `<div class="load-status">Leyendo archivo...</div>`;
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rowsRaw = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+    const headers = (rowsRaw[0] || []).map(h => String(h).trim());
+    const rows = rowsRaw.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
 
-            if (estudiante) {
-                resultBox.classList.remove('hidden');
-                resultBox.innerHTML = `
-                    <div class="bg-indigo-600 p-8 rounded-t-3xl text-white">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="text-xs uppercase font-bold tracking-widest text-indigo-300">Boletín Oficial de Notas</p>
-                                <h3 class="text-3xl font-black">${estudiante.nombre}</h3>
-                                <p class="font-mono text-sm opacity-80">ID: ${estudiante.cedula}</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-xs font-bold uppercase text-indigo-300">Promedio</p>
-                                <p class="text-5xl font-black">${estudiante.promedio.toFixed(1)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white p-6 rounded-b-3xl border-x border-b border-slate-200 card-shadow grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
-                                <i class="fa-solid fa-book-open text-indigo-500"></i> Notas Diarias
-                            </h4>
-                            <div class="grid grid-cols-3 gap-3">
-                                ${[1,2,3,4,5,6].map(i => `
-                                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                                        <p class="text-[10px] font-bold text-slate-400">D${i}</p>
-                                        <p class="text-lg font-black text-slate-800">${estudiante['d'+i]}</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        <div class="space-y-6">
-                            <div>
-                                <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
-                                    <i class="fa-solid fa-star text-amber-500"></i> Apreciación
-                                </h4>
-                                <div class="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-2">
-                                    <span class="text-sm font-bold text-slate-600">Asistencia</span>
-                                    <span class="font-black text-indigo-600">${estudiante.asistencia}</span>
-                                </div>
-                                <div class="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                    <span class="text-sm font-bold text-slate-600">Trabajo de Clase</span>
-                                    <span class="font-black text-indigo-600">${estudiante.apr2}</span>
-                                </div>
-                            </div>
-                            <div class="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex justify-between items-center">
-                                <div class="flex items-center gap-3">
-                                    <i class="fa-solid fa-file-signature text-2xl text-emerald-600"></i>
-                                    <div><p class="text-xs font-bold text-emerald-800 uppercase">Examen Semestral</p><p class="text-xs text-emerald-600">Evaluación Final</p></div>
-                                </div>
-                                <span class="text-3xl font-black text-emerald-700">${estudiante.examen}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                resultBox.scrollIntoView({ behavior: 'smooth' });
-            } else {
-                alert("No se encontró registro para esa cédula. Verifica e intenta de nuevo.");
-                resultBox.classList.add('hidden');
-            }
-        }
+    const {cedulaIdx, nombreIdx} = detectColumns(headers);
+    const scale = guessScale(headers, rows, cedulaIdx, nombreIdx);
 
-        // ---------- ROL: DOCENTE (CSV publicado, sin login) ----------
+    const payload = {
+      headers, cedulaIdx, nombreIdx, rows, scale,
+      uploadedAt: new Date().toISOString()
+    };
 
-        // Muestra el panel docente con los datos ya cargados (o los pide si aún no existen)
-        function cargarDatosDocente() {
-            cargarDatos(function() {
-                renderSheetTable();
-                updateSummaryStats();
-                initChart();
-            });
-        }
+    const res = await window.storage.set(STORAGE_KEY, JSON.stringify(payload), true);
+    if(!res) throw new Error('No se pudo guardar');
 
-        // Fuerza una recarga real desde el CSV (botón "Actualizar notas")
-        function actualizarDatosDocente() {
-            datosCargados = false;
-            cargarDatosDocente();
-        }
+    currentData = payload;
+    renderStatus();
+    renderLoadStatus();
+  }catch(err){
+    loadStatus.innerHTML = `<div class="load-status">⚠️ No se pudo leer el archivo. Verifica que sea un Excel válido.</div>`;
+  }
+});
 
-        function renderSheetTable() {
-            const head = document.getElementById('sheet-table-head');
-            const body = document.getElementById('sheet-table-body');
-            if (!sheetRows.length) { head.innerHTML = ''; body.innerHTML = '<tr><td class="p-4 text-slate-400">Sin datos</td></tr>'; return; }
-            const [headerRow, ...rows] = sheetRows;
-            head.innerHTML = '<tr>' + headerRow.map(h => `<th class="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">${h}</th>`).join('') + '</tr>';
-            body.innerHTML = rows.map(r =>
-                '<tr>' + headerRow.map((_, i) => `<td class="px-4 py-2 whitespace-nowrap">${r[i] ?? ''}</td>`).join('') + '</tr>'
-            ).join('');
-        }
+function renderLoadStatus(){
+  if(currentData && currentData.rows && currentData.rows.length){
+    const d = new Date(currentData.uploadedAt);
+    const fecha = isNaN(d) ? '' : d.toLocaleString('es-PA');
+    loadStatus.innerHTML = `<div class="load-status"><span>✅ ${currentData.rows.length} estudiantes cargados · ${fecha}</span><button id="clearBtn">Borrar datos</button></div>`;
+    document.getElementById('clearBtn').addEventListener('click', async ()=>{
+      if(!confirm('¿Seguro que quieres borrar la planilla cargada? Los estudiantes ya no podrán consultar notas.')) return;
+      try{
+        await window.storage.delete(STORAGE_KEY, true);
+      }catch(e){}
+      currentData = null;
+      renderStatus();
+      renderLoadStatus();
+    });
+  } else {
+    loadStatus.innerHTML = `<div class="load-status">Ninguna planilla cargada todavía.</div>`;
+  }
+}
 
-        function updateSummaryStats() {
-            document.getElementById('docente-total').textContent = studentData.length;
-            const promedioGrupal = studentData.length
-                ? (studentData.reduce((sum, e) => sum + e.promedio, 0) / studentData.length).toFixed(1)
-                : "--";
-            document.getElementById('docente-promedio').textContent = promedioGrupal;
-            const reprobados = studentData.filter(e => e.promedio < 3.0).length;
-            document.getElementById('docente-reprobados').textContent = reprobados;
-        }
-
-        function chartCounts() {
-            const aprobados = studentData.filter(e => e.promedio >= 3.0).length;
-            const reprobados = studentData.filter(e => e.promedio > 0 && e.promedio < 3.0).length;
-            const sinNota = studentData.filter(e => !e.promedio).length;
-            return [aprobados, reprobados, sinNota];
-        }
-
-        function initChart() {
-            const ctx = document.getElementById('performanceChart');
-            if (!ctx) return;
-            if (myChart) myChart.destroy();
-            const [aprobados, reprobados, sinNota] = chartCounts();
-            myChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Aprobados', 'Reprobados', 'Sin Nota'],
-                    datasets: [{
-                        label: 'Número de Estudiantes',
-                        data: [aprobados, reprobados, sinNota],
-                        backgroundColor: ['#10b981', '#f43f5e', '#cbd5e1'],
-                        borderRadius: 12,
-                        barThickness: 40
-                    }]
-                },
-                options: {
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { color: '#818cf8', font: { weight: 'bold' } } },
-                        x: { grid: { display: false }, ticks: { color: '#818cf8', font: { weight: 'bold' } } }
-                    }
-                }
-            });
-        }
-
-        // ---------- Navegación y control de rol ----------
-
-        function showTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
-                btn.classList.add('text-slate-500');
-            });
-            document.getElementById(`content-${tabId}`).classList.add('active');
-            const targetBtn = document.getElementById(`btn-${tabId}`);
-            targetBtn.classList.remove('text-slate-500');
-            targetBtn.classList.add('bg-white', 'text-indigo-600', 'shadow-sm');
-            if (tabId === 'docente' && sheetRows.length) initChart();
-        }
-
-        function enterAsStudent() {
-            document.getElementById('role-gate').classList.add('hidden');
-            document.getElementById('app-shell').classList.remove('hidden');
-            document.querySelectorAll('.nav-btn[data-role]').forEach(b => b.classList.add('hidden'));
-            document.getElementById('btn-estudiantes').classList.remove('hidden');
-            showTab('estudiantes');
-            cargarDatos();
-        }
-
-        function enterAsTeacher() {
-            document.getElementById('role-gate').classList.add('hidden');
-            document.getElementById('app-shell').classList.remove('hidden');
-            document.querySelectorAll('.nav-btn[data-role]').forEach(b => b.classList.add('hidden'));
-            document.getElementById('btn-docente').classList.remove('hidden');
-            showTab('docente');
-            cargarDatosDocente();
-        }
-
-        function logout() {
-            sheetRows = [];
-            document.getElementById('app-shell').classList.add('hidden');
-            document.getElementById('role-gate').classList.remove('hidden');
-        }
-    </script>
+loadSharedData();
+</script>
 </body>
 </html>
