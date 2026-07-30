@@ -372,7 +372,8 @@ async function loadSharedData(){
   try{
     const snap = await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).get();
     if(snap.exists){
-      currentData = snap.data();
+      const data = snap.data();
+      currentData = { ...data, rows: data.rowsJSON ? JSON.parse(data.rowsJSON) : [] };
       renderStatus();
     } else {
       currentData = null;
@@ -535,14 +536,15 @@ fileInput.addEventListener('change', async (e)=>{
     const scale = guessScale(headers, rows, cedulaIdx, nombreIdx);
 
     const payload = {
-      headers, cedulaIdx, nombreIdx, rows, scale,
+      headers, cedulaIdx, nombreIdx, scale,
+      rowsJSON: JSON.stringify(rows),
       uploadedAt: new Date().toISOString(),
       pin: TEACHER_PIN
     };
 
     await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).set(payload);
 
-    currentData = payload;
+    currentData = { headers, cedulaIdx, nombreIdx, scale, rows, uploadedAt: payload.uploadedAt };
     renderStatus();
     renderLoadStatus();
   }catch(err){
