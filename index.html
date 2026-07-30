@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#16302A;
@@ -289,12 +290,15 @@
 <div class="teacher-panel" id="teacherPanel">
   <div id="pinGate">
     <h2>Acceso de profesor</h2>
-    <p>Ingresa el PIN para cargar o reemplazar la planilla de notas.</p>
-    <div class="pin-row">
-      <input id="pinInput" type="password" placeholder="PIN" inputmode="numeric">
-      <button id="pinBtn">Entrar</button>
+    <p>Inicia sesión con tu correo y contraseña para cargar o reemplazar la planilla de notas.</p>
+    <div class="pin-row" style="flex-direction:column;">
+      <input id="emailInput" type="email" placeholder="Correo" autocomplete="username" style="margin-bottom:8px;">
+      <div style="display:flex; gap:8px;">
+        <input id="pinInput" type="password" placeholder="Contraseña" autocomplete="current-password">
+        <button id="pinBtn">Entrar</button>
+      </div>
     </div>
-    <p class="pin-error" id="pinError" style="display:none;">PIN incorrecto. Intenta de nuevo.</p>
+    <p class="pin-error" id="pinError" style="display:none;">Correo o contraseña incorrectos.</p>
   </div>
   <div id="uploadArea" class="hidden">
     <h2>Cargar planilla</h2>
@@ -304,14 +308,13 @@
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
     </label>
     <div id="loadStatus"></div>
+    <button id="logoutBtn" style="background:none; color:var(--muted); text-decoration:underline; font-size:12px; margin-top:10px; padding:0;">Cerrar sesión</button>
   </div>
 </div>
 
 <p class="foot-note">Los datos de la planilla se guardan de forma compartida para que cada estudiante pueda consultarlos desde este mismo enlace.</p>
 
 <script>
-const TEACHER_PIN = "2026"; // el profesor puede cambiar este PIN aquí y en las reglas de Firestore
-
 // --- Configuración de Firebase ---
 // Reemplaza estos valores por los de TU proyecto (Firebase Console > Configuración del proyecto > tus apps > SDK setup)
 const firebaseConfig = {
@@ -325,9 +328,11 @@ const firebaseConfig = {
 const CONFIG_IS_PLACEHOLDER = firebaseConfig.apiKey === "TU_API_KEY";
 
 let db = null;
+let auth = null;
 if(!CONFIG_IS_PLACEHOLDER){
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
+  auth = firebase.auth();
 }
 const DOC_REF_PATH = { collection: "boletin", doc: "data" };
 
@@ -504,16 +509,45 @@ if(params.get('profe') === '1'){
   teacherPanel.classList.remove('hidden');
 }
 
-pinBtn.addEventListener('click', ()=>{
-  if(pinInput.value === TEACHER_PIN){
+const emailInput = document.getElementById('emailInput');
+const logoutBtn = document.getElementById('logoutBtn');
+
+pinBtn.addEventListener('click', async ()=>{
+  pinError.style.display = 'none';
+  const email = emailInput.value.trim();
+  const password = pinInput.value;
+  if(!email || !password) return;
+  try{
+    await auth.signInWithEmailAndPassword(email, password);
     pinGate.classList.add('hidden');
     uploadArea.classList.remove('hidden');
     renderLoadStatus();
-  } else {
+  } catch(err){
+    pinError.textContent = 'Correo o contraseña incorrectos.';
     pinError.style.display = 'block';
   }
 });
 pinInput.addEventListener('keydown', e=>{ if(e.key==='Enter') pinBtn.click(); });
+emailInput.addEventListener('keydown', e=>{ if(e.key==='Enter') pinBtn.click(); });
+
+logoutBtn.addEventListener('click', async ()=>{
+  await auth.signOut();
+  uploadArea.classList.add('hidden');
+  pinGate.classList.remove('hidden');
+  emailInput.value = '';
+  pinInput.value = '';
+});
+
+// Si ya había una sesión iniciada (recarga de página), saltar directo al panel de carga
+if(auth){
+  auth.onAuthStateChanged(user=>{
+    if(user && !teacherPanel.classList.contains('hidden')){
+      pinGate.classList.add('hidden');
+      uploadArea.classList.remove('hidden');
+      renderLoadStatus();
+    }
+  });
+}
 
 dropzone.addEventListener('click', ()=> fileInput.click());
 fileInput.addEventListener('change', async (e)=>{
@@ -538,8 +572,7 @@ fileInput.addEventListener('change', async (e)=>{
     const payload = {
       headers, cedulaIdx, nombreIdx, scale,
       rowsJSON: JSON.stringify(rows),
-      uploadedAt: new Date().toISOString(),
-      pin: TEACHER_PIN
+      uploadedAt: new Date().toISOString()
     };
 
     await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).set(payload);
