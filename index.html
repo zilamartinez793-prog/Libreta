@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#16302A;
@@ -308,8 +310,26 @@
 <p class="foot-note">Los datos de la planilla se guardan de forma compartida para que cada estudiante pueda consultarlos desde este mismo enlace.</p>
 
 <script>
-const TEACHER_PIN = "2026"; // el profesor puede cambiar este PIN editando el archivo
-const STORAGE_KEY = "boletin:data";
+const TEACHER_PIN = "2026"; // el profesor puede cambiar este PIN aquí y en las reglas de Firestore
+
+// --- Configuración de Firebase ---
+// Reemplaza estos valores por los de TU proyecto (Firebase Console > Configuración del proyecto > tus apps > SDK setup)
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  storageBucket: "TU_PROYECTO.appspot.com",
+  messagingSenderId: "TU_SENDER_ID",
+  appId: "TU_APP_ID"
+};
+const CONFIG_IS_PLACEHOLDER = firebaseConfig.apiKey === "TU_API_KEY";
+
+let db = null;
+if(!CONFIG_IS_PLACEHOLDER){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+}
+const DOC_REF_PATH = { collection: "boletin", doc: "data" };
 
 const subtitle = document.getElementById('subtitle');
 const hint = document.getElementById('hint');
@@ -340,19 +360,19 @@ function normalizeCedula(str){
 }
 
 function storageAvailable(){
-  return typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function';
+  return db !== null;
 }
 
 async function loadSharedData(){
   if(!storageAvailable()){
-    hint.innerHTML = '⚠️ Esta página no está abierta en el entorno correcto. Debes usar el <b>enlace publicado</b> de Claude (no el archivo .html descargado ni abrirlo como archivo local) para que las notas se guarden y compartan correctamente.';
+    hint.innerHTML = '⚠️ Falta configurar Firebase. Reemplaza <code>firebaseConfig</code> en el archivo con los datos de tu proyecto para que las notas se guarden y compartan.';
     searchBtn.disabled = true;
     return;
   }
   try{
-    const res = await window.storage.get(STORAGE_KEY, true);
-    if(res && res.value){
-      currentData = JSON.parse(res.value);
+    const snap = await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).get();
+    if(snap.exists){
+      currentData = snap.data();
       renderStatus();
     } else {
       currentData = null;
@@ -360,7 +380,7 @@ async function loadSharedData(){
     }
   }catch(e){
     currentData = null;
-    renderStatus();
+    hint.textContent = '⚠️ No se pudo conectar con la base de datos. Revisa la configuración de Firebase y las reglas de Firestore.';
   }
 }
 
@@ -516,17 +536,17 @@ fileInput.addEventListener('change', async (e)=>{
 
     const payload = {
       headers, cedulaIdx, nombreIdx, rows, scale,
-      uploadedAt: new Date().toISOString()
+      uploadedAt: new Date().toISOString(),
+      pin: TEACHER_PIN
     };
 
-    const res = await window.storage.set(STORAGE_KEY, JSON.stringify(payload), true);
-    if(!res) throw new Error('No se pudo guardar');
+    await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).set(payload);
 
     currentData = payload;
     renderStatus();
     renderLoadStatus();
   }catch(err){
-    loadStatus.innerHTML = `<div class="load-status">⚠️ No se pudo leer el archivo. Verifica que sea un Excel válido.</div>`;
+    loadStatus.innerHTML = `<div class="load-status">⚠️ No se pudo guardar. Verifica que el archivo sea un Excel válido y que las reglas de Firestore permitan escribir con este PIN.</div>`;
   }
 });
 
@@ -538,7 +558,7 @@ function renderLoadStatus(){
     document.getElementById('clearBtn').addEventListener('click', async ()=>{
       if(!confirm('¿Seguro que quieres borrar la planilla cargada? Los estudiantes ya no podrán consultar notas.')) return;
       try{
-        await window.storage.delete(STORAGE_KEY, true);
+        await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).delete();
       }catch(e){}
       currentData = null;
       renderStatus();
