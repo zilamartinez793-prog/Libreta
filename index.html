@@ -153,9 +153,6 @@
   .badge.warn{background:var(--chalk-yellow); color:#3a2c05;}
   .badge.bad{background:var(--pen-red);}
   .badge.neutral{background:#7d8a83;}
-  .badge.purple{background:#6B3FA0;}
-  .badge.navy{background:#1F3A5F;}
-  .badge.blue{background:#2B6CB0;}
   .empty-state{
     font-size:14px;
     color:var(--ink-soft);
@@ -278,15 +275,14 @@
 
 <div class="board">
   <div class="paper" id="paperCard">
-    <span class="eyebrow">Boletín informativo (Matemática)</span>
+    <span class="eyebrow">Boletín escolar</span>
     <h1>Consulta tus notas</h1>
     <p class="subtitle" id="subtitle">Escribe tu número de cédula para ver tus calificaciones.</p>
     <div class="search-row">
-      <label for="cedulaInput" style="position:absolute;left:-9999px;">Número de cédula</label>
       <input id="cedulaInput" placeholder="Ej: 8-123-4567" autocomplete="off">
       <button id="searchBtn">Ver notas</button>
     </div>
-    <p class="hint" id="hint">Cargando...</p>
+    <p class="hint" id="hint"></p>
     <div id="resultArea"></div>
   </div>
 </div>
@@ -296,10 +292,8 @@
     <h2>Acceso de profesor</h2>
     <p>Inicia sesión con tu correo y contraseña para cargar o reemplazar la planilla de notas.</p>
     <div class="pin-row" style="flex-direction:column;">
-      <label for="emailInput" style="position:absolute;left:-9999px;">Correo</label>
       <input id="emailInput" type="email" placeholder="Correo" autocomplete="username" style="margin-bottom:8px;">
       <div style="display:flex; gap:8px;">
-        <label for="pinInput" style="position:absolute;left:-9999px;">Contraseña</label>
         <input id="pinInput" type="password" placeholder="Contraseña" autocomplete="current-password">
         <button id="pinBtn">Entrar</button>
       </div>
@@ -340,36 +334,7 @@ if(!CONFIG_IS_PLACEHOLDER){
   db = firebase.firestore();
   auth = firebase.auth();
 }
-
-// --- Modelo de datos ---
-// IMPORTANTE (privacidad): en vez de un único documento con la planilla completa
-// (que el navegador de CUALQUIER visitante descargaría entero), guardamos:
-//   - boletin_meta/data      -> metadata pública: materias, escala, fecha, cantidad
-//   - boletin_students/{ID}  -> UN documento por estudiante, donde ID = cédula normalizada
-// Así, buscar una cédula solo pide ESE documento puntual, nunca la lista completa.
-// Esto requiere reglas de Firestore que permitan "get" (leer por ID exacto) a cualquiera,
-// pero NO "list" (listar/consultar la colección) sin estar autenticado como profesor.
-// Reglas sugeridas (Firebase Console > Firestore Database > Reglas):
-//
-// rules_version = '2';
-// service cloud.firestore {
-//   match /databases/{database}/documents {
-//     match /boletin_meta/{docId} {
-//       allow read: if true;
-//       allow write: if request.auth != null;
-//     }
-//     match /boletin_students/{cedula} {
-//       allow get: if true;
-//       allow list: if request.auth != null;
-//       allow write: if request.auth != null;
-//     }
-//   }
-// }
-
-const META_COLLECTION = 'boletin_meta';
-const META_DOC = 'data';
-const STUDENTS_COLLECTION = 'boletin_students';
-const BATCH_LIMIT = 450; // margen bajo el límite de 500 de Firestore
+const DOC_REF_PATH = { collection: "boletin", doc: "data" };
 
 const subtitle = document.getElementById('subtitle');
 const hint = document.getElementById('hint');
@@ -388,9 +353,7 @@ const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
 const loadStatus = document.getElementById('loadStatus');
 
-// currentMeta solo contiene datos NO sensibles: nombres de materia, escala, fecha, cantidad.
-// Nunca contiene cédulas, nombres ni notas de estudiantes.
-let currentMeta = null;
+let currentData = null;
 
 function normalize(str){
   return String(str ?? '')
@@ -399,14 +362,6 @@ function normalize(str){
 }
 function normalizeCedula(str){
   return String(str ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');
-}
-function formatFecha(iso, withTime){
-  const d = new Date(iso);
-  if(isNaN(d)) return '';
-  return withTime ? d.toLocaleString('es-PA') : d.toLocaleDateString('es-PA', {day:'2-digit', month:'2-digit', year:'numeric'});
-}
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function storageAvailable(){
@@ -420,172 +375,139 @@ async function loadSharedData(){
     return;
   }
   try{
-    const snap = await db.collection(META_COLLECTION).doc(META_DOC).get();
-    currentMeta = snap.exists ? snap.data() : null;
-    renderStatus();
+    const snap = await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).get();
+    if(snap.exists){
+      const data = snap.data();
+      currentData = { ...data, rows: data.rowsJSON ? JSON.parse(data.rowsJSON) : [] };
+      renderStatus();
+    } else {
+      currentData = null;
+      renderStatus();
+    }
   }catch(e){
-    console.error('Error al cargar metadata:', e);
-    currentMeta = null;
+    currentData = null;
     hint.textContent = '⚠️ No se pudo conectar con la base de datos. Revisa la configuración de Firebase y las reglas de Firestore.';
   }
 }
 
 function renderStatus(){
-  if(currentMeta && currentMeta.count){
-    hint.textContent = `Planilla cargada · ${currentMeta.count} estudiantes · ${formatFecha(currentMeta.uploadedAt)}`;
+  if(currentData && currentData.rows && currentData.rows.length){
+    const d = new Date(currentData.uploadedAt);
+    const fecha = isNaN(d) ? '' : d.toLocaleDateString('es-PA', {day:'2-digit', month:'2-digit', year:'numeric'});
+    hint.textContent = `Planilla cargada · ${currentData.rows.length} estudiantes · ${fecha}`;
+    searchBtn.disabled = false;
   } else {
     hint.textContent = 'Aún no se ha cargado ninguna planilla. Pide a tu profesor que la cargue.';
+    searchBtn.disabled = false;
   }
-  searchBtn.disabled = false;
 }
 
 function detectColumns(headers){
   const cedulaKeys = ['cedula','ci','dni','identificacion','documento','id'];
   const nombreKeys = ['nombre','estudiante','alumno'];
-  const grupoKeys = ['grupo','seccion','nivel','curso','salon','grado'];
-  let cedulaIdx = -1, nombreIdx = -1, grupoIdx = -1;
+  let cedulaIdx = -1, nombreIdx = -1;
   headers.forEach((h,i)=>{
     const n = normalize(h);
     if(cedulaIdx===-1 && cedulaKeys.some(k=>n.includes(k))) cedulaIdx = i;
     if(nombreIdx===-1 && nombreKeys.some(k=>n.includes(k))) nombreIdx = i;
-    if(grupoIdx===-1 && grupoKeys.some(k=>n.includes(k))) grupoIdx = i;
   });
   if(cedulaIdx===-1) cedulaIdx = 0;
-  return {cedulaIdx, nombreIdx, grupoIdx};
+  return {cedulaIdx, nombreIdx};
 }
 
-// Solo acepta números "limpios" (ej: "4.5", "3", "1,6"). Rechaza cosas como "11° J".
-// Esto evita que columnas de texto (grupo, sección, etc.) contaminen la detección de escala.
-function toCleanNumber(v){
-  if(v === null || v === undefined || v === '') return NaN;
-  const s = String(v).trim().replace(',', '.');
-  if(!/^-?\d+(\.\d+)?$/.test(s)) return NaN;
-  return parseFloat(s);
+function guessScale(headers, rows, cedulaIdx, nombreIdx){
+  let max = 0;
+  rows.forEach(r=>{
+    r.forEach((v,i)=>{
+      if(i===cedulaIdx || i===nombreIdx) return;
+      const n = parseFloat(v);
+      if(!isNaN(n) && n>max) max = n;
+    });
+  });
+  return max <= 5.5 ? {max:5, pass:3} : {max:100, pass:60};
 }
 
 function badgeClass(value, scale){
-  const n = toCleanNumber(value);
+  const n = parseFloat(value);
   if(isNaN(n)) return 'neutral';
-  if(scale.max === 5){
-    // Escala 1.0 - 5.0
-    if(n < 2) return 'purple';   // 1.0 - 1.9
-    if(n < 3) return 'bad';      // 2.0 - 2.9 (rojo)
-    if(n < 4) return 'warn';     // 3.0 - 3.9 (amarillo)
-    if(n < 5) return 'good';     // 4.0 - 4.9 (verde)
-    return 'blue';                // 5.0
-  }
-  // Escala 0 - 100 (fallback)
   if(n >= scale.pass) {
-    const highThreshold = 80;
+    const highThreshold = scale.max===5 ? 4 : 80;
     return n >= highThreshold ? 'good' : 'warn';
   }
   return 'bad';
 }
 
-function isNavyColumn(materia){
-  const n = normalize(materia);
-  return n.includes('diari') || n.includes('apreci');
+function findStudent(cedula){
+  if(!currentData || !currentData.rows) return null;
+  const target = normalizeCedula(cedula);
+  const {cedulaIdx} = currentData;
+  return currentData.rows.find(r => normalizeCedula(r[cedulaIdx]) === target) || null;
 }
 
-function findColumnIndex(subjects, keywords){
-  return subjects.findIndex(h => {
-    const n = normalize(h);
-    return keywords.every(k => n.includes(k));
-  });
-}
-
-// Pide UN documento puntual por ID (cédula normalizada). Nunca lista la colección completa.
-async function findStudent(cedula){
-  const id = normalizeCedula(cedula);
-  if(!id) return null;
-  const snap = await db.collection(STUDENTS_COLLECTION).doc(id).get();
-  return snap.exists ? snap.data() : null;
-}
-
-function renderResult(student){
+function renderResult(row){
   resultArea.innerHTML = '';
+  // remove existing stamp
   const oldStamp = paperCard.querySelector('.stamp');
   if(oldStamp) oldStamp.remove();
 
-  if(!student){
+  if(!row){
     resultArea.innerHTML = `<div class="empty-state">No encontramos esa cédula en la planilla cargada. Verifica el número e intenta de nuevo.</div>`;
     return;
   }
 
-  const {subjects, scale} = currentMeta;
-  const valores = student.valores || [];
+  const {headers, cedulaIdx, nombreIdx, scale} = currentData;
+  const nombre = nombreIdx>=0 ? row[nombreIdx] : '';
 
   let html = '';
-  if(student.nombre) html += `<div class="student-name">${escapeHtml(student.nombre)}</div>`;
-  if(student.grupo) html += `<div style="font-size:12px;color:var(--ink-soft);margin:-10px 0 14px;font-family:var(--font-mono);">${escapeHtml(student.grupo)}</div>`;
+  if(nombre) html += `<div class="student-name">${escapeHtml(nombre)}</div>`;
   html += `<table class="grades"><thead><tr><th>Materia</th><th>Nota</th></tr></thead><tbody>`;
 
   let sum = 0, count = 0;
-  subjects.forEach((materia,i)=>{
-    const val = valores[i];
+  headers.forEach((h,i)=>{
+    if(i===cedulaIdx || i===nombreIdx) return;
+    const val = row[i];
     if(val === undefined || val === '') return;
-    const cls = isNavyColumn(materia) ? 'navy' : badgeClass(val, scale);
-    const n = toCleanNumber(val);
+    const cls = badgeClass(val, scale);
+    const n = parseFloat(val);
     if(!isNaN(n)){ sum += n; count++; }
-    html += `<tr><td>${escapeHtml(materia)}</td><td><span class="badge ${cls}">${escapeHtml(val)}</span></td></tr>`;
+    html += `<tr><td>${escapeHtml(h)}</td><td><span class="badge ${cls}">${escapeHtml(val)}</span></td></tr>`;
   });
   html += `</tbody></table>`;
   resultArea.innerHTML = html;
 
-  // El sello (arriba a la derecha) = (Promedio de notas diarias + Promedio de apreciación + Examen) / 3.
-  // Si falta alguna de las 3 columnas, se usa como respaldo el promedio de todas las materias numéricas.
-  const promedioDiarioIdx = findColumnIndex(subjects, ['promedio','diari']);
-  const promedioApreciacionIdx = findColumnIndex(subjects, ['promedio','apreci']);
-  const examenIdx = findColumnIndex(subjects, ['examen']);
-
-  const vDiario = promedioDiarioIdx>=0 ? toCleanNumber(valores[promedioDiarioIdx]) : NaN;
-  const vApreciacion = promedioApreciacionIdx>=0 ? toCleanNumber(valores[promedioApreciacionIdx]) : NaN;
-  const vExamen = examenIdx>=0 ? toCleanNumber(valores[examenIdx]) : NaN;
-
-  let stampValue = null;
-  if(!isNaN(vDiario) && !isNaN(vApreciacion) && !isNaN(vExamen)){
-    stampValue = ((vDiario + vApreciacion + vExamen) / 3).toFixed(1);
-  } else if(count>0){
-    stampValue = (sum/count).toFixed(1);
-  }
-
-  if(stampValue !== null){
+  if(count>0){
+    const avg = (sum/count).toFixed(1);
     const stamp = document.createElement('div');
     stamp.className = 'stamp';
-    stamp.innerHTML = `<span class="num">${stampValue}</span><span class="lbl">Promedio</span>`;
+    stamp.innerHTML = `<span class="num">${avg}</span><span class="lbl">Promedio</span>`;
     paperCard.appendChild(stamp);
   }
 }
 
-searchBtn.addEventListener('click', async ()=>{
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+searchBtn.addEventListener('click', ()=>{
   const val = cedulaInput.value.trim();
   if(!val){
     resultArea.innerHTML = `<div class="empty-state">Escribe tu número de cédula arriba.</div>`;
     return;
   }
-  if(!currentMeta || !currentMeta.count){
+  if(!currentData || !currentData.rows || !currentData.rows.length){
     resultArea.innerHTML = `<div class="empty-state">Todavía no hay ninguna planilla cargada.</div>`;
     return;
   }
-  searchBtn.disabled = true;
-  const originalLabel = searchBtn.textContent;
-  searchBtn.textContent = 'Buscando...';
-  try{
-    const student = await findStudent(val);
-    renderResult(student);
-  }catch(e){
-    console.error('Error al buscar estudiante:', e);
-    resultArea.innerHTML = `<div class="empty-state">⚠️ Ocurrió un error al buscar. Intenta de nuevo en unos segundos.</div>`;
-  }finally{
-    searchBtn.disabled = false;
-    searchBtn.textContent = originalLabel;
-  }
+  const row = findStudent(val);
+  renderResult(row);
 });
 cedulaInput.addEventListener('keydown', e=>{ if(e.key==='Enter') searchBtn.click(); });
 
-// El panel de profesor ahora siempre está visible; la protección la da
-// exclusivamente el login (correo/contraseña) validado contra Firebase Auth,
-// más las reglas de Firestore que exigen estar autenticado para escribir datos.
+// Teacher panel — solo se muestra si el enlace incluye ?profe=1
+const params = new URLSearchParams(window.location.search);
+if(params.get('profe') === '1'){
+  teacherPanel.classList.remove('hidden');
+}
 
 const emailInput = document.getElementById('emailInput');
 const logoutBtn = document.getElementById('logoutBtn');
@@ -644,97 +566,37 @@ fileInput.addEventListener('change', async (e)=>{
     const headers = (rowsRaw[0] || []).map(h => String(h).trim());
     const rows = rowsRaw.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
 
-    const {cedulaIdx, nombreIdx, grupoIdx} = detectColumns(headers);
-    const subjectIndices = headers
-      .map((h,i)=>i)
-      .filter(i => i!==cedulaIdx && i!==nombreIdx && i!==grupoIdx && headers[i] && headers[i].trim() !== '');
-    if(subjectIndices.length === 0){
-      loadStatus.innerHTML = `<div class="load-status">⚠️ No se detectaron columnas de materias. Revisa los encabezados del archivo.</div>`;
-      return;
-    }
-    const subjects = subjectIndices.map(i => headers[i]);
-    // Escala fija: el sistema de notas siempre es 1.0-5.0 (no se adivina a partir de los datos,
-    // porque columnas como Asistencia u otras con valores fuera de rango rompían la detección).
-    const scale = {max:5, pass:3};
+    const {cedulaIdx, nombreIdx} = detectColumns(headers);
+    const scale = guessScale(headers, rows, cedulaIdx, nombreIdx);
 
-    // Construir un documento por estudiante, con ID = cédula normalizada
-    const studentDocs = [];
-    const seenIds = new Set();
-    let skipped = 0;
-    rows.forEach(row=>{
-      const rawCedula = row[cedulaIdx];
-      const id = normalizeCedula(rawCedula);
-      if(!id){ skipped++; return; }
-      if(seenIds.has(id)) skipped++; // cédula duplicada: se conserva la última
-      seenIds.add(id);
-      studentDocs.push({
-        id,
-        data: {
-          nombre: nombreIdx>=0 ? String(row[nombreIdx] ?? '') : '',
-          grupo: grupoIdx>=0 ? String(row[grupoIdx] ?? '') : '',
-          valores: subjectIndices.map(i => row[i] ?? '')
-        }
-      });
-    });
+    const payload = {
+      headers, cedulaIdx, nombreIdx, scale,
+      rowsJSON: JSON.stringify(rows),
+      uploadedAt: new Date().toISOString()
+    };
 
-    loadStatus.innerHTML = `<div class="load-status">Borrando planilla anterior...</div>`;
-    await clearAllStudentDocs();
+    await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).set(payload);
 
-    loadStatus.innerHTML = `<div class="load-status">Guardando ${studentDocs.length} estudiantes...</div>`;
-    await writeStudentsInBatches(studentDocs);
-
-    const uploadedAt = new Date().toISOString();
-    await db.collection(META_COLLECTION).doc(META_DOC).set({
-      subjects, scale, uploadedAt, count: studentDocs.length
-    });
-
-    currentMeta = { subjects, scale, uploadedAt, count: studentDocs.length };
+    currentData = { headers, cedulaIdx, nombreIdx, scale, rows, uploadedAt: payload.uploadedAt };
     renderStatus();
-    renderLoadStatus(skipped);
+    renderLoadStatus();
   }catch(err){
     console.error('Error al guardar en Firestore:', err);
     loadStatus.innerHTML = `<div class="load-status">⚠️ No se pudo guardar. Detalle: ${escapeHtml(err.message || String(err))}</div>`;
-  }finally{
-    fileInput.value = '';
   }
 });
 
-async function writeStudentsInBatches(studentDocs){
-  for(let i=0; i<studentDocs.length; i+=BATCH_LIMIT){
-    const chunk = studentDocs.slice(i, i+BATCH_LIMIT);
-    const batch = db.batch();
-    chunk.forEach(({id, data})=>{
-      batch.set(db.collection(STUDENTS_COLLECTION).doc(id), data);
-    });
-    await batch.commit();
-  }
-}
-
-async function clearAllStudentDocs(){
-  // Requiere estar autenticado (las reglas solo permiten "list" a profesores logueados)
-  const snap = await db.collection(STUDENTS_COLLECTION).get();
-  const docs = snap.docs;
-  for(let i=0; i<docs.length; i+=BATCH_LIMIT){
-    const chunk = docs.slice(i, i+BATCH_LIMIT);
-    const batch = db.batch();
-    chunk.forEach(d => batch.delete(d.ref));
-    await batch.commit();
-  }
-}
-
-function renderLoadStatus(skipped){
-  if(currentMeta && currentMeta.count){
-    const nota = skipped ? ` · ${skipped} fila(s) omitida(s) por cédula vacía o duplicada` : '';
-    loadStatus.innerHTML = `<div class="load-status"><span>✅ ${currentMeta.count} estudiantes cargados · ${formatFecha(currentMeta.uploadedAt, true)}${nota}</span><button id="clearBtn">Borrar datos</button></div>`;
+function renderLoadStatus(){
+  if(currentData && currentData.rows && currentData.rows.length){
+    const d = new Date(currentData.uploadedAt);
+    const fecha = isNaN(d) ? '' : d.toLocaleString('es-PA');
+    loadStatus.innerHTML = `<div class="load-status"><span>✅ ${currentData.rows.length} estudiantes cargados · ${fecha}</span><button id="clearBtn">Borrar datos</button></div>`;
     document.getElementById('clearBtn').addEventListener('click', async ()=>{
       if(!confirm('¿Seguro que quieres borrar la planilla cargada? Los estudiantes ya no podrán consultar notas.')) return;
       try{
-        await clearAllStudentDocs();
-        await db.collection(META_COLLECTION).doc(META_DOC).delete();
-      }catch(e){
-        console.error('Error al borrar:', e);
-      }
-      currentMeta = null;
+        await db.collection(DOC_REF_PATH.collection).doc(DOC_REF_PATH.doc).delete();
+      }catch(e){}
+      currentData = null;
       renderStatus();
       renderLoadStatus();
     });
