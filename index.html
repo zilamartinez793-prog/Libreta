@@ -291,7 +291,7 @@
   </div>
 </div>
 
-<div class="teacher-panel hidden" id="teacherPanel">
+<div class="teacher-panel" id="teacherPanel">
   <div id="pinGate">
     <h2>Acceso de profesor</h2>
     <p>Inicia sesión con tu correo y contraseña para cargar o reemplazar la planilla de notas.</p>
@@ -583,11 +583,9 @@ searchBtn.addEventListener('click', async ()=>{
 });
 cedulaInput.addEventListener('keydown', e=>{ if(e.key==='Enter') searchBtn.click(); });
 
-// Teacher panel — solo se muestra si el enlace incluye ?profe=1
-const params = new URLSearchParams(window.location.search);
-if(params.get('profe') === '1'){
-  teacherPanel.classList.remove('hidden');
-}
+// El panel de profesor ahora siempre está visible; la protección la da
+// exclusivamente el login (correo/contraseña) validado contra Firebase Auth,
+// más las reglas de Firestore que exigen estar autenticado para escribir datos.
 
 const emailInput = document.getElementById('emailInput');
 const logoutBtn = document.getElementById('logoutBtn');
